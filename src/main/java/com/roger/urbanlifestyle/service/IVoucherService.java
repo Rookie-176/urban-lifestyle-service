@@ -1,0 +1,20 @@
+package com.roger.urbanlifestyle.service;
+
+import com.baomidou.mybatisplus.extension.service.IService;
+import com.roger.urbanlifestyle.dto.Result;
+import com.roger.urbanlifestyle.entity.Voucher;
+
+/**
+ * <p>
+ *  服务类
+ * </p>
+ *
+ * 
+ * 2021-12-22
+ */
+public interface IVoucherService extends IService<Voucher> {
+
+    Result queryVoucherOfShop(Long shopId);
+
+    void addSeckillVoucher(Voucher voucher);
+}
