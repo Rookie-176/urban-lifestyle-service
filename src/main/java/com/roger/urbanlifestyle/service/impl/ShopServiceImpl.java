@@ -13,6 +13,7 @@ import com.roger.urbanlifestyle.utils.RedisConstants;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import java.util.HashMap;
@@ -25,7 +26,6 @@ import java.util.concurrent.TimeUnit;
  * </p>
  *
  * 
- * 2021-12-22
  */
 @Slf4j
 @Service
@@ -52,5 +52,20 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
             stringRedisTemplate.opsForValue().set(shopKey, JSONUtil.toJsonStr(shop), RedisConstants.CACHE_SHOP_TTL, TimeUnit.MINUTES);
         }
         return Result.ok(shop);
+    }
+
+    @Override
+    @Transactional
+    public Result updateShop(Shop shop) {
+        Long id = shop.getId();
+        if (id == null) {
+            return Result.fail("id is null");
+        }
+
+        updateById(shop);
+
+        String shopKey = RedisConstants.CACHE_SHOP_KEY + shop.getId();
+        stringRedisTemplate.delete(shopKey);
+        return Result.ok();
     }
 }
