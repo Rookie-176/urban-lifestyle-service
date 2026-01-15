@@ -1,6 +1,7 @@
 package com.roger.urbanlifestyle.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.roger.urbanlifestyle.dto.Result;
 import com.roger.urbanlifestyle.entity.Shop;
 
 /**
@@ -13,4 +14,5 @@ import com.roger.urbanlifestyle.entity.Shop;
  */
 public interface IShopService extends IService<Shop> {
 
+    Result queryShopById(Long id);
 }
