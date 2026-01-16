@@ -4,6 +4,7 @@ import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.bean.copier.CopyOptions;
 import cn.hutool.core.util.BooleanUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.roger.urbanlifestyle.dto.Result;
@@ -11,14 +12,18 @@ import com.roger.urbanlifestyle.entity.Shop;
 import com.roger.urbanlifestyle.mapper.ShopMapper;
 import com.roger.urbanlifestyle.service.IShopService;
 import com.roger.urbanlifestyle.utils.RedisConstants;
+import com.roger.urbanlifestyle.utils.RedisData;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -34,6 +39,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
 
     @Resource
     StringRedisTemplate stringRedisTemplate;
+    private static final ExecutorService CACHE_REBUILD_EXECUTOR = Executors.newFixedThreadPool(10);
 
     @Override
     public Result queryShopById(Long id) {
@@ -41,7 +47,11 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         // Shop shop = queryWithPassThrough(id);
 
         // prevent cache breakdown with mutex lock
-        Shop shop = queryWithMutex(id);
+//        Shop shop = queryWithMutex(id);
+
+        // prevent cache breakdown with logical expire
+        Shop shop = queryWithLogicalExpire(id);
+
         if (shop == null) {
             return Result.fail("shop doesn't exist!");
         }
@@ -96,6 +106,51 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         return shop;
     }
 
+    public Shop queryWithLogicalExpire (Long id) {
+        String shopKey = RedisConstants.CACHE_SHOP_KEY + id;
+        String redisDataJson = stringRedisTemplate.opsForValue().get(shopKey);
+
+        if (StrUtil.isBlank(redisDataJson)) {
+            return null;
+        }
+
+        RedisData redisData = JSONUtil.toBean(redisDataJson, RedisData.class);
+        Shop shop = JSONUtil.toBean((JSONObject)redisData.getData(), Shop.class);
+
+        LocalDateTime expireTime = redisData.getExpireTime();
+        if (expireTime.isAfter(LocalDateTime.now())) {
+            return shop;
+        }
+
+        String lockKey = RedisConstants.LOCK_SHOP_KEY + id;
+        boolean locked = false;
+        locked = tryLock(lockKey);
+        if (locked){
+
+            redisDataJson = stringRedisTemplate.opsForValue().get(shopKey);
+            if (StrUtil.isNotBlank(redisDataJson)) {
+                redisData = JSONUtil.toBean(redisDataJson, RedisData.class);
+                shop = JSONUtil.toBean((JSONObject)redisData.getData(), Shop.class);
+                expireTime = redisData.getExpireTime();
+                if (expireTime.isAfter(LocalDateTime.now())) {
+                    return shop;
+                }
+            }
+
+            CACHE_REBUILD_EXECUTOR.submit(() -> {
+                try {
+                    saveShop2Redis(id, 20L);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                } finally {
+                    releaseLock(lockKey);
+                }
+            });
+        }
+
+        return shop;
+    }
+
     public Shop queryWithPassThrough (Long id) {
         String shopKey = RedisConstants.CACHE_SHOP_KEY + id;
         String shopJson = stringRedisTemplate.opsForValue().get(shopKey);
@@ -138,5 +193,15 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
 
     private void releaseLock (String key) {
         stringRedisTemplate.delete(RedisConstants.LOCK_SHOP_KEY + key);
+    }
+
+    public void saveShop2Redis(Long id, Long expireSecond) throws InterruptedException {
+        Shop shop = getById(id);
+
+        RedisData redisData = new RedisData();
+        Thread.sleep(200);
+        redisData.setData(shop);
+        redisData.setExpireTime(LocalDateTime.now().plusSeconds(expireSecond));
+        stringRedisTemplate.opsForValue().set(RedisConstants.CACHE_SHOP_KEY+id, JSONUtil.toJsonStr(redisData));
     }
 }
