@@ -31,3 +31,29 @@ build/
 
 ### VS Code ###
 .vscode/
+
+############################
+# Runtime logs & temp files
+############################
+
+# Generic logs
+*.log
+logs/
+log/
+
+# Spring Boot runtime logs
+spring.log
+application.log
+
+# Nginx runtime files
+nginx.pid
+nginx-*/logs/
+src/main/resources/nginx-*/logs/
+src/main/resources/nginx-*/nginx.pid
+
+############################
+# OS / misc
+############################
+
+.DS_Store
+Thumbs.db
