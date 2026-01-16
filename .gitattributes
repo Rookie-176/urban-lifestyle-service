@@ -1,0 +1,18 @@
+# Ignore runtime / config / docs from language stats
+*.log linguist-generated
+*.pid linguist-generated
+
+# Nginx
+nginx/** linguist-vendored
+src/main/resources/nginx-*/** linguist-vendored
+
+# Config & docs
+*.yml linguist-documentation
+*.yaml linguist-documentation
+*.md linguist-documentation
+*.conf linguist-documentation
+
+# Frontend static files (if not main focus)
+*.html linguist-documentation
+*.css linguist-documentation
+*.js linguist-documentation
