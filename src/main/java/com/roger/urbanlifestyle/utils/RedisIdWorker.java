@@ -7,6 +7,7 @@ import javax.annotation.Resource;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.concurrent.TimeUnit;
 
 @Component
 public class RedisIdWorker {
@@ -23,7 +24,13 @@ public class RedisIdWorker {
         long timestamp=now.toEpochSecond(ZoneOffset.UTC) - BEGIN_TIMESTAMP;
 
         String yyyyMMdd = now.format(DateTimeFormatter.ofPattern("yyyy:MM:dd"));
-        long count = stringRedisTemplate.opsForValue().increment("icr:" + keyPrefix + ":" + yyyyMMdd);
+
+        String idKey = "icr:" + keyPrefix + ":" + yyyyMMdd;
+        long count = stringRedisTemplate.opsForValue().increment(idKey);
+
+        if (count == 1) {
+            stringRedisTemplate.expire(idKey, 1, TimeUnit.DAYS);
+        }
 
         return timestamp << 32 | count ;
     }
