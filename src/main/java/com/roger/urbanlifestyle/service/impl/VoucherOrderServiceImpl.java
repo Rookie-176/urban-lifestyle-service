@@ -15,6 +15,8 @@ import com.roger.urbanlifestyle.utils.RedisConstants;
 import com.roger.urbanlifestyle.utils.RedisIdWorker;
 import com.roger.urbanlifestyle.utils.SimpleRedisLock;
 import com.roger.urbanlifestyle.utils.UserHolder;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.aop.framework.AopConfigException;
 import org.springframework.aop.framework.AopContext;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -40,7 +42,10 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     private RedisIdWorker redisIdWorker;
 
     @Resource
-    StringRedisTemplate stringRedisTemplate;
+    private StringRedisTemplate stringRedisTemplate;
+
+    @Resource
+    private RedissonClient redissonClient;
 
     @Override
     public Result seckillVoucher(Long voucherId) {
@@ -62,9 +67,12 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         UserDTO user = UserHolder.getUser();
         Long userId = user.getId();
 
-        SimpleRedisLock simpleRedisLock = new SimpleRedisLock("order" + userId, stringRedisTemplate);
+//        SimpleRedisLock simpleRedisLock = new SimpleRedisLock("order" + userId, stringRedisTemplate);
 
-        boolean trylock = simpleRedisLock.trylock(1200);
+        RLock lock = redissonClient.getLock("lock:order" + userId);
+
+//        boolean trylock = simpleRedisLock.trylock(1200);
+        boolean trylock = lock.tryLock();
         if (!trylock) {
             return Result.fail("one user can only place one order");
         }
@@ -73,7 +81,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             IVoucherOrderService proxy = (IVoucherOrderService)AopContext.currentProxy();
             return proxy.createVoucherOrder(voucherId, voucher);
         } finally {
-            simpleRedisLock.unlock();
+            lock.unlock();
         }
     }
 
